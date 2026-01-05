@@ -29,7 +29,6 @@
 */
 
 //   现在我对它挺满意的，不过其实还有一个很好的算法是基于空间网格划分的并行计算，以后可以试试
-//   难受的是，我现在还没搞明白为什么VS内置的CUDA编译选项要求文件中不能出现中文注释，所以说暂时不能直接一键编译。
 //   经过实验发现，1050显卡在5000粒子数时能正常工作，七秒完成一千步计算
 //   但是在2万粒子数时，任务管理器当中可以看到GPU行为的异常，3D核心占用量在爆满和空闲之间反复横跳，以5秒为周期
 //   初始帧的计算时长超过5秒，疑似单个物理帧被拆解成多步进行
@@ -122,6 +121,10 @@ void allocateMemory() {
         h_r[i] = new double[3];
         h_v[i] = new double[3];
         h_a[i] = new double[3];
+        // 初始化加速度为0，防止未初始化值导致数值不稳定
+        for (int d = 0; d < 3; d++) {
+            h_a[i][d] = 0.0;
+        }
     }
 
     // 设备粒子内存分配
@@ -200,6 +203,18 @@ void copyDataToDevice() {
     delete[] h_r_flat;
     delete[] h_v_flat;
     delete[] h_a_flat;
+}
+
+// 只复制速度数据到设备端（用于主循环中的速度缩放）
+void copyVelocityToDevice() {
+    double* h_v_flat = new double[N * 3];
+    for (int i = 0; i < N; i++) {
+        for (int d = 0; d < 3; d++) {
+            h_v_flat[i * 3 + d] = h_v[i][d];
+        }
+    }
+    CUDA_CHECK_ERROR(cudaMemcpy(d_v, h_v_flat, N * 3 * sizeof(double), cudaMemcpyHostToDevice));
+    delete[] h_v_flat;
 }
 
 // 将粒子数据从设备复制回主机
@@ -548,12 +563,24 @@ void initVelocities() {
         for (int i = 0; i < 3; i++)
             h_v[n][i] -= vCM[i];
 
-    // 重新等比例缩放所有粒子的速度以达到想要的温度
-    rescaleVelocities();
+    // 重新等比例缩放所有粒子的速度以达到想要的温度（只在主机端操作，不涉及设备端）
+    double vSqdSum = 0;
+    for (int n = 0; n < N; n++)
+        for (int i = 0; i < 3; i++)
+            vSqdSum += h_v[n][i] * h_v[n][i];
+    double lambda = sqrt(3 * (N - 1) * T / vSqdSum);
+    for (int n = 0; n < N; n++)
+        for (int i = 0; i < 3; i++)
+            h_v[n][i] *= lambda;
+    // 注意：这里不调用copyDataToDevice()，因为设备端内存可能还未分配
+    // 数据将在main()中的copyDataToDevice()调用时复制到设备
 }
 
 // 根据目标温度重新设置速度
 void rescaleVelocities() {
+    // 先从设备端同步最新的速度数据到主机端
+    copyDataFromDevice();
+    
     double vSqdSum = 0;
     for (int n = 0; n < N; n++)
         for (int i = 0; i < 3; i++)
@@ -563,8 +590,8 @@ void rescaleVelocities() {
         for (int i = 0; i < 3; i++)
             h_v[n][i] *= lambda;
     
-    // 更新设备端速度数据
-    copyDataToDevice();
+    // 只更新设备端速度数据，不覆盖位置和加速度
+    copyVelocityToDevice();
 }
 
 // 即时温度测量函数
@@ -605,70 +632,25 @@ int main() {
     // 将数据复制到设备
     copyDataToDevice();
     
-    // 开始初始帧调试，在GPU完成近邻表与加速度的初始化
-    cout << "--- Debugging Initial Frame ---" << endl;
-
-    // 更新近邻表 (CUDA 版本)
-    cout << "Updating pair list (GPU)..." << endl;
-    updatePairList(); 
-    CUDA_CHECK_ERROR(cudaDeviceSynchronize()); // 确保内核执行完毕
-
-    // 检查 nPairs
+    // 在GPU完成近邻表与加速度的初始化
+    updatePairList();
     CUDA_CHECK_ERROR(cudaMemcpy(&nPairs, d_nPairs, sizeof(int), cudaMemcpyDeviceToHost));
-    cout << "Initial nPairs after updatePairList: " << nPairs << endl;
-
-    if (nPairs <= 0) {
-        cout << "Warning: Initial nPairs is zero or negative. Skipping further initial checks." << endl;
-    } else {
-        // 更新粒子对距离 (CUDA 版本)
-        cout << "Updating pair separations (GPU)..." << endl;
+    
+    if (nPairs > 0) {
         updatePairSeparations();
-        CUDA_CHECK_ERROR(cudaDeviceSynchronize()); // 确保内核执行完毕
-
-        // 检查前几对的距离平方
-        int checkPairs = min(nPairs, 10); // 检查前10对或实际对数
-        int* h_pairList_debug = new int[checkPairs * 2];
-        double* h_rSqdPair_debug = new double[checkPairs];
         
-        cout << "Checking first " << checkPairs << " pairs' rSqd:" << endl;
-        CUDA_CHECK_ERROR(cudaMemcpy(h_pairList_debug, d_pairList, checkPairs * 2 * sizeof(int), cudaMemcpyDeviceToHost));
-        CUDA_CHECK_ERROR(cudaMemcpy(h_rSqdPair_debug, d_rSqdPair, checkPairs * sizeof(double), cudaMemcpyDeviceToHost));
-
-        cout.precision(6); // 设置输出精度
-        for(int p=0; p<checkPairs; ++p) {
-            cout << "  Pair (" << h_pairList_debug[p*2] << ", " << h_pairList_debug[p*2+1] << "): rSqd = " << scientific << h_rSqdPair_debug[p] << fixed << endl;
-        }
-        delete[] h_pairList_debug;
-        delete[] h_rSqdPair_debug;
-
-        // 计算初始加速度 (CUDA 版本)
-        cout << "Computing initial accelerations (GPU)..." << endl;
-        // 需要先置零加速度
+        // 计算初始加速度
         int blockSize = 256;
         int numBlocks = (N + blockSize - 1) / blockSize;
         zeroAccelerationsKernel<<<numBlocks, blockSize>>>(d_a, N);
         CUDA_CHECK_ERROR(cudaGetLastError());
         CUDA_CHECK_ERROR(cudaDeviceSynchronize());
-
-        // 现在计算加速度
+        
         int numBlocksPairs = (nPairs + blockSize - 1) / blockSize;
         computeAccelerationsKernel<<<numBlocksPairs, blockSize>>>(d_r, d_a, d_pairList, d_drPair, d_rSqdPair, nPairs, rCutOff, N);
         CUDA_CHECK_ERROR(cudaGetLastError());
         CUDA_CHECK_ERROR(cudaDeviceSynchronize());
-
-        // 检查前几个粒子的加速度
-        int checkParticles = min(N, 5); // 检查前5个粒子
-        double* h_a_debug = new double[checkParticles * 3];
-        cout << "Checking initial acceleration of first " << checkParticles << " particles:" << endl;
-        CUDA_CHECK_ERROR(cudaMemcpy(h_a_debug, d_a, checkParticles * 3 * sizeof(double), cudaMemcpyDeviceToHost));
-
-        for (int i=0; i<checkParticles; ++i) {
-            cout << "  Particle " << i << ": a = (" << scientific << h_a_debug[i*3+0] << ", " << h_a_debug[i*3+1] << ", " << h_a_debug[i*3+2] << ")" << fixed << endl;
-        }
-        delete[] h_a_debug;
     }
-
-    cout << "--- End Debugging Initial Frame ---" << endl;
 
     
     double dt = 0.01;

@@ -28,6 +28,21 @@
     <CharacterSet>MultiByte</CharacterSet>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup>
+    <CUDAErrorOnInvalidExecutable>true</CUDAErrorOnInvalidExecutable>
+    <CUDAFastMath>false</CUDAFastMath>
+    <CUDADebug>enable</CUDADebug>
+    <GenerateGPUDebugInfo>true</GenerateGPUDebugInfo>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <CudaCompile>
+      <GenerateLineInfo>true</GenerateLineInfo>
+      <CodeGeneration>compute_89,sm_89</CodeGeneration>
+      <!-- 根据实际GPU架构修改 -->
+      <GPUDebugInfo>true</GPUDebugInfo>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+    </CudaCompile>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.8.props" />
@@ -78,10 +93,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="ConsoleApplicationMD3_CUDA.cu" />
-    <CudaCompile Include="CUDAexample.cu" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="ConsoleApplicationMD3.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
