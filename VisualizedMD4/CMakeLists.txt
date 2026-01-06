@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(VisualizedMD4_CUDA LANGUAGES CXX CUDA)
+project(VisualizedMD4_CUDA LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,8 +24,19 @@ set_target_properties(glfw PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${GLFW_INCLUDE_DIR}"
 )
 
-# GLAD - use local pre-generated files
+# GLAD - use local pre-generated files as OBJECT library
 message(STATUS "Using local GLAD from: ${CMAKE_CURRENT_SOURCE_DIR}/glad")
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/glad/src/glad.c")
+    message(FATAL_ERROR "GLAD source file not found! Please download GLAD from https://glad.dav1d.de/ and place glad.c in ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/")
+endif()
+
+# Create GLAD as OBJECT library (compiled but not linked separately)
+add_library(glad_objects OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/glad.c)
+set_target_properties(glad_objects PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+target_include_directories(glad_objects PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/include)
 
 # Source files
 set(CUDA_SOURCES
@@ -35,7 +46,6 @@ set(CUDA_SOURCES
 
 set(CPP_SOURCES
     visualization.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/glad.c
 )
 
 set(HEADER_FILES
@@ -43,24 +53,20 @@ set(HEADER_FILES
     visualization.h
 )
 
-# Create executable
+# Create executable with GLAD objects directly included
 add_executable(${PROJECT_NAME}
     ${CUDA_SOURCES}
     ${CPP_SOURCES}
     ${HEADER_FILES}
+    $<TARGET_OBJECTS:glad_objects>
 )
-
-# GLAD include directory
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/glad/src/glad.c")
-    message(FATAL_ERROR "GLAD source file not found! Please download GLAD from https://glad.dav1d.de/ and place glad.c in ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/")
-endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/glad/include
 )
 
-# Link libraries
+# Link libraries (glad is already included via OBJECT)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     CUDA::cudart
     OpenGL::GL
@@ -68,8 +74,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # CUDA specific settings
+# Note: CUDA_SEPARABLE_COMPILATION is OFF because all device code is in a single file
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CUDA_SEPARABLE_COMPILATION ON
+    CUDA_SEPARABLE_COMPILATION OFF
     CUDA_ARCHITECTURES "61;70;75;80;86"
 )
 

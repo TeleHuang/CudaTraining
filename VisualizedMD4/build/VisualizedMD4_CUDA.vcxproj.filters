@@ -22,14 +22,19 @@
     <CustomBuild Include="D:\Workspace\C++\CudaTraining\VisualizedMD4\CMakeLists.txt" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="D:\Workspace\C++\CudaTraining\VisualizedMD4\glad\src\glad.c">
-      <Filter>Source Files</Filter>
-    </None>
     <None Include="D:\Workspace\C++\CudaTraining\VisualizedMD4\md4_simulation.cuh" />
+  </ItemGroup>
+  <ItemGroup>
+    <Object Include="D:\Workspace\C++\CudaTraining\VisualizedMD4\build\glad_objects.dir\$(Configuration)\glad.obj">
+      <Filter>Object Libraries</Filter>
+    </Object>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">
       <UniqueIdentifier>{4CB5BB84-A833-33DE-A432-C07CD9F72FDE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Object Libraries">
+      <UniqueIdentifier>{026E7B47-70DB-352A-BFB4-7D1EA2AB7FD7}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{3B2424E2-15D7-3A60-8FA6-1F782D40D4CB}</UniqueIdentifier>
