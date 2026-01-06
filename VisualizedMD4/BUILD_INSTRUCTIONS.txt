@@ -1,0 +1,152 @@
+================================================================================
+         VisualizedMD4_CUDA - Build Instructions
+================================================================================
+
+This project requires the following dependencies:
+  1. CUDA Toolkit (10.0 or later)
+  2. CMake (3.18 or later)
+  3. GLFW (will be auto-downloaded if not found)
+  4. GLAD (OpenGL loader - needs manual setup)
+
+================================================================================
+STEP 1: Install GLAD (OpenGL Loader)
+================================================================================
+
+GLAD is required to load OpenGL functions. You need to generate and download it:
+
+1. Go to: https://glad.dav1d.de/
+
+2. Use these settings:
+   - Language: C/C++
+   - Specification: OpenGL
+   - Profile: Core
+   - gl (API): Version 3.3 (or higher)
+   - Generate a loader: checked
+
+3. Click "GENERATE" button
+
+4. Download the ZIP file
+
+5. Extract the contents:
+   - Copy "glad/include/glad" folder to: VisualizedMD4/glad/include/glad/
+   - Copy "glad/include/KHR" folder to: VisualizedMD4/glad/include/KHR/
+   - Copy "glad/src/glad.c" to: VisualizedMD4/glad/src/glad.c
+
+Final directory structure should be:
+  VisualizedMD4/
+  +-- glad/
+  |   +-- include/
+  |   |   +-- glad/
+  |   |   |   +-- glad.h
+  |   |   +-- KHR/
+  |   |       +-- khrplatform.h
+  |   +-- src/
+  |       +-- glad.c
+  +-- md4_simulation.cuh
+  +-- md4_simulation.cu
+  +-- visualization.h
+  +-- visualization.cpp
+  +-- VisualizedMD4_CUDA.cu
+  +-- CMakeLists.txt
+
+================================================================================
+STEP 2: Build with CMake
+================================================================================
+
+Option A: Command Line Build
+----------------------------
+
+# Create build directory
+mkdir build
+cd build
+
+# Configure (Windows with Visual Studio)
+cmake .. -G "Visual Studio 17 2022" -A x64
+
+# Or configure with Ninja (faster)
+cmake .. -G Ninja
+
+# Build
+cmake --build . --config Release
+
+Option B: Visual Studio
+-----------------------
+
+1. Open Visual Studio
+2. File -> Open -> CMake...
+3. Select the CMakeLists.txt file
+4. Build -> Build All
+
+Option C: CLion / VS Code
+-------------------------
+
+Simply open the VisualizedMD4 folder and the IDE will detect CMakeLists.txt.
+
+================================================================================
+STEP 3: Run
+================================================================================
+
+After building, run the executable:
+
+  .\VisualizedMD4_CUDA.exe
+
+Command line options:
+  -n <N>      Number of particles (default: 864)
+  -spf <N>    Simulation steps per frame (default: 5)
+  -h          Show help
+
+Examples:
+  .\VisualizedMD4_CUDA.exe -n 2000        # Run with 2000 particles
+  .\VisualizedMD4_CUDA.exe -n 864 -spf 10 # 864 particles, 10 steps per frame
+
+================================================================================
+Controls
+================================================================================
+
+  Left mouse drag : Rotate view
+  Scroll wheel    : Zoom in/out
+  R               : Reset camera
+  Up/Down arrows  : Change particle size
+  ESC             : Exit
+
+================================================================================
+Troubleshooting
+================================================================================
+
+1. "GLFW not found" error:
+   - CMake will try to download GLFW automatically
+   - If fails, install GLFW manually: https://www.glfw.org/download.html
+
+2. "glad.h not found" error:
+   - Make sure you followed Step 1 correctly
+   - Check that glad.h is in glad/include/glad/
+
+3. CUDA errors:
+   - Make sure CUDA Toolkit is installed and in PATH
+   - Check GPU driver is up to date
+
+4. OpenGL errors:
+   - Make sure your GPU supports OpenGL 3.3 or higher
+   - Update graphics drivers
+
+================================================================================
+Alternative: Manual Build with nvcc (Advanced)
+================================================================================
+
+If you prefer not to use CMake, you can build manually:
+
+# Windows (requires GLFW and GLAD pre-installed)
+nvcc -arch=sm_61 ^
+  -I"path/to/glfw/include" ^
+  -I"glad/include" ^
+  -L"path/to/glfw/lib" ^
+  md4_simulation.cu ^
+  VisualizedMD4_CUDA.cu ^
+  visualization.cpp ^
+  glad/src/glad.c ^
+  -lglfw3 -lopengl32 -lgdi32 ^
+  -o VisualizedMD4_CUDA.exe
+
+Note: Replace "path/to/glfw" with your actual GLFW installation path.
+
+================================================================================
